@@ -11,6 +11,7 @@
 #include <geometry_msgs/Twist.h>
 #include <kobuki_msgs/BumperEvent.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/LaserScan.h>
 
 #define N_BUMPER (3)
 #define RAD2DEG(rad) ((rad)*180./M_PI)
@@ -21,17 +22,18 @@ void markerCallback(const visualization_msgs::MarkerArray::ConstPtr& msg){
     visualization_msgs::Marker m;
     std_msgs::ColorRGBA color;
     int numMarkers;
-
-    color = msg->markers[0].color;
+    //color = msg->markers[0].color;
     numMarkers = msg->markers.size();
-    if(color.r == 1.0){
-        redFrontier = true;
-    }
-    else{
-        redFrontier = false;
-    }
-   
-    std::cout << numMarkers << " markers in markerArray" << "\n";
+    
+    redFrontier = false;
+    for(int i = 0; i < numMarkers; i++){
+        color = msg->markers[i].color;
+        if (color.r == 1.0){
+            redFrontier = true;
+            break;
+        }
+    }   
+    std::cout << numMarkers << " markers in markerArray \n";
 }
 
 uint8_t bumper[3] = {kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED};
@@ -45,6 +47,45 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
     posX = msg->pose.pose.position.x;
     posY = msg->pose.pose.position.y;
     yaw = tf::getYaw(msg->pose.pose.orientation);
+    //ROS_INFO("Odom: (%.2f, %.2f, %.2f)", posX, posY, yaw);
+}
+
+float minLaserDist = std::numeric_limits<float>::infinity(), minLSLaserDist = std::numeric_limits<float>::infinity(), minRSLaserDist = std::numeric_limits<float>::infinity();
+float LSLaserSum = 0, RSLaserSum = 0;
+int32_t nLasers=0, desiredNLasers=0, desiredAngle=22.5; 
+void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
+	// Calculates minLaserDist overall, per side as minLSLaserDist and minRSLaserDist, 
+    // and the sum of laser measurements on each side LSLaserSum and RSLaserSum
+    
+    minLaserDist = std::numeric_limits<float>::infinity();
+    minLSLaserDist = std::numeric_limits<float>::infinity();
+    minRSLaserDist = std::numeric_limits<float>::infinity();
+    LSLaserSum = 0, RSLaserSum = 0;
+    float maxLaserThreshold = 7;
+    nLasers = (msg->angle_max - msg->angle_min) / msg->angle_increment;
+    desiredNLasers = DEG2RAD(desiredAngle)/msg->angle_increment;
+
+    int start = 0, end = nLasers;
+    if (DEG2RAD(desiredAngle) < msg->angle_max && DEG2RAD(-desiredAngle) > msg->angle_min){
+        start = nLasers / 2 - desiredNLasers;
+        end = nLasers / 2 + desiredNLasers;
+    }
+    for (uint32_t laser_idx = start; laser_idx < end; ++laser_idx){
+        minLaserDist = std::min(minLaserDist, msg->ranges[laser_idx]);
+        if (laser_idx <= nLasers / 2){
+            minRSLaserDist = std::min(minRSLaserDist, msg->ranges[laser_idx]);
+            if (msg->ranges[laser_idx] < maxLaserThreshold){
+                RSLaserSum += msg->ranges[laser_idx];
+            } 
+        }
+        else{
+            minLSLaserDist = std::min(minLSLaserDist, msg->ranges[laser_idx]);
+            if (msg->ranges[laser_idx] < maxLaserThreshold){
+                LSLaserSum += msg->ranges[laser_idx];
+            } 
+        }
+    }
+    ROS_INFO("Min Laser Distance: %f \n Left: %f \n Right: %f \n LSum: %f \n RSum: %f", minLaserDist, minLSLaserDist, minRSLaserDist, LSLaserSum, RSLaserSum);
 }
 
 float omega = 0.0, accX = 0.0, accY = 0.0, yaw_imu = 0.0;
@@ -142,6 +183,35 @@ void rotateThruAngle(float angleRAD, float angleSpeed, float yawStart, float set
     }
 }
 
+float chooseAngular(float laserSideSumThreshold, float probSpinToLarger){
+    // Chooses the angular velocity and direction
+    // Can also call this in second argument of copysign() to only extract a direction (e.g. for a rotation)
+    float prob = randBetween(0.0, 1.0), angular_vel = M_PI/8, maxLaserThreshold = 7;
+    ros::spinOnce();
+    if(fabs(fabs(LSLaserSum) - fabs(RSLaserSum)) > laserSideSumThreshold){
+        //If one side's laser distance > other side by more than laserSideSumThreshold, go to that side
+        if(fabs(LSLaserSum) - fabs(RSLaserSum) > laserSideSumThreshold){
+            ROS_INFO("LS >> RS. Spin CCW");
+            angular_vel = randBetween(M_PI/16, M_PI/8); //improves gmapping resolution compared to always using constant value
+        }
+        else{
+            ROS_INFO("RS >> LS. Spin CW");
+            angular_vel = -randBetween(M_PI/16, M_PI/8);
+        }
+    }
+    else{
+        // Laser distances approx. equal. Go to larger at probSpinToLarger probability
+        ROS_INFO("LS ~ RS. Spinning to larger at %.2f chance", probSpinToLarger);
+        if ((fabs(LSLaserSum) > fabs(RSLaserSum) || fabs(minLSLaserDist) > fabs(minRSLaserDist)) && prob < probSpinToLarger){
+            angular_vel = randBetween(M_PI/16, M_PI/8); 
+        }
+        else{
+            angular_vel = -randBetween(M_PI/16, M_PI/8);
+        }
+    }  
+    return angular_vel;
+}
+
 void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
                          const std::chrono::time_point<std::chrono::system_clock> start){
     bool any_bumper_pressed = true;
@@ -194,20 +264,21 @@ int main(int argc, char** argv) {
 
     // Subscribers
     ros::Subscriber bumper_sub = n.subscribe("mobile_base/events/bumper", 10, &bumperCallback);
-    //ros::Subscriber odom = n.subscribe("odom", 1, &odomCallback);
-    //ros::Subscriber imu_sub = n.subscribe("mobile_base/sensors/imu_data", 1, &imuCallback);
+    ros::Subscriber odom = n.subscribe("odom", 1, &odomCallback);
+    ros::Subscriber imu_sub = n.subscribe("mobile_base/sensors/imu_data", 1, &imuCallback);
+    ros::Subscriber laser_sub = n.subscribe("scan", 10, &laserCallback);
     ros::Subscriber frontier_sub = n.subscribe("contest3/frontiers", 10, &markerCallback);
     
     bool exploring = true;
-    float oldX = posX, oldY = posY;
-    int checkStuckCount = 0;
+    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1;
+    int checkStuckCount = 0, clearPathIters = 0;
+    float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0;
 
     // Contest count down timer
     std::chrono::time_point<std::chrono::system_clock> start;
     start = std::chrono::system_clock::now();
     uint64_t secondsElapsed = 0;
 
-    
     while(ros::ok() && secondsElapsed <= 1200) {      
         explore.start();
         //colour1.value = RED;
@@ -217,12 +288,44 @@ int main(int argc, char** argv) {
         //ROS_INFO("Colour: %d", colour2.value);
         //led2_pub.publish(colour2);
 
+        prob = randBetween(0.0, 1.0);
+
         if(anyBumperPressed()){
             bumperPressedAction(&vel, &vel_pub, &secondsElapsed, start); 
         }
 
-        if(exploring && secondsElapsed % 10 == 0){
-            moveThruDistance(0.6, 0.2, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+        if (exploring && !anyBumperPressed() && minLaserDist < maxLaserThreshold){
+            if (minLaserDist > clearPathThreshold){
+                ROS_INFO("Clear path. Iter: %d", clearPathIters);
+                linear = 0.2;
+                angular = 0;
+                clearPathIters ++;
+                if (clearPathIters > 300){
+                    // Random movement 25% of the time if clear path
+                    if (randBetween(0.0, 1.0) < 0.25){
+                        rotateThruAngle(copysign(randBetween(-M_PI/6, M_PI/6), chooseAngular(200, 0.55)), M_PI/3, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
+                    }
+                    clearPathIters = 0;
+                }
+            }
+        }
+        if(exploring && checkStuckCount == 500){
+            std::cout << "Distance moved: " << dist(oldX, oldY, posX, posY) << "\n";
+            std::cout << "Angle moved: " << fabs(yaw - oldYaw) << "\n";
+            if(dist(oldX, oldY, posX, posY) < 0.5 && fabs(yaw - oldYaw) < 0.05){
+                std::cout << "Stuck! \n";
+                moveThruDistance(-0.55, 0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+                rotateThruAngle(2*M_PI - 0.01, M_PI/2, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                //rotateThruAngle(randBetween(-M_PI/4, M_PI/4), M_PI/8, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+            }
+            oldX = posX;
+            oldY = posY;
+            oldYaw = yaw;
+            checkStuckCount = 0;
+        }
+
+        if(exploring && redFrontier){
+            explore.start();
         }
 
         /*if(exploring && redFrontier){
@@ -259,8 +362,10 @@ int main(int argc, char** argv) {
         ROS_INFO("Stuck count: %d", checkStuckCount);
 
         oldX = posX, oldY = posY;*/
-
+        //std::cout << "Stuck count: " << checkStuckCount << "\n";
+        checkStuckCount ++;
         ros::spinOnce();
+        secondsElapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now()-start).count();
         ros::Duration(0.01).sleep();
     }
     return 0;

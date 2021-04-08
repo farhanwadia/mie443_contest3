@@ -61,9 +61,9 @@ Explore::Explore()
   double timeout;
   double min_frontier_size;
   private_nh_.param("planner_frequency", planner_frequency_, 1.0);
-  private_nh_.param("progress_timeout", timeout, 10.0);
+  private_nh_.param("progress_timeout", timeout, 30.0);
   progress_timeout_ = ros::Duration(timeout);
-  private_nh_.param("visualize", visualize_, true);
+  private_nh_.param("visualize", visualize_, false);
   private_nh_.param("potential_scale", potential_scale_, 1e-3);
   private_nh_.param("orientation_scale", orientation_scale_, 0.0);
   private_nh_.param("gain_scale", gain_scale_, 1.0);
@@ -185,7 +185,8 @@ void Explore::makePlan()
   //ROS_DEBUG("found %lu frontiers", frontiers.size());
   std::cout << "found " << frontiers.size() << " frontiers \n";
   for (size_t i = 0; i < frontiers.size(); ++i) {
-    ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
+    std::cout << "Frontier " << i << ". Cost: " << frontiers[i].cost << "\n";
+    //ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
   }
 
   if (frontiers.empty()) {
@@ -210,7 +211,6 @@ void Explore::makePlan()
     return;
   }
   geometry_msgs::Point target_position = frontier->centroid;
-
   // time out if we are not making any progress
   bool same_goal = prev_goal_ == target_position;
   prev_goal_ = target_position;
