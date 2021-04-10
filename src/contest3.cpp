@@ -1,39 +1,119 @@
-#include <ros/ros.h>
-#include <ros/package.h>
-#include "explore.h"
-//
-// If you cannot find the sound play library try the following command.
-// sudo apt install ros-kinetic-sound-play
-#include <sound_play/sound_play.h>
-#include <ros/console.h>
-#include <kobuki_msgs/Led.h>
-#include <nav_msgs/Odometry.h>
-#include <geometry_msgs/Twist.h>
-#include <kobuki_msgs/BumperEvent.h>
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/LaserScan.h>
+#include <contest3.h>
 
-#define N_BUMPER (3)
-#define RAD2DEG(rad) ((rad)*180./M_PI)
-#define DEG2RAD(deg) ((deg)*M_PI/180.)
+float dist(float x1, float y1, float x2, float y2){
+    //Calculates the Euclidean distance between two points (x1, y1), (x2, y2)
+    return sqrt(pow(x2-x1, 2) + pow(y2-y1, 2));
+}
 
-bool redFrontier = false;
+bool allFrontiersRed = false; // return true if ALL frontiers are red
+std::vector<std::vector<geometry_msgs::Point>> redFrontiers;
 void markerCallback(const visualization_msgs::MarkerArray::ConstPtr& msg){
     visualization_msgs::Marker m;
-    std_msgs::ColorRGBA color;
     int numMarkers;
-    //color = msg->markers[0].color;
     numMarkers = msg->markers.size();
     
-    redFrontier = false;
-    for(int i = 0; i < numMarkers; i++){
-        color = msg->markers[i].color;
-        if (color.r == 1.0){
-            redFrontier = true;
-            break;
+    // Reset redFrontiers vector
+    if(!redFrontiers.empty()){
+        redFrontiers.clear();
+    }
+
+    allFrontiersRed = true;
+    std::cout << numMarkers/2 << " frontiers found \n";
+    for(int i = 0; i < numMarkers; i+=2){
+        m = msg->markers[i];
+        if (m.color.r < 1.0){
+            allFrontiersRed = false;
         }
-    }   
-    std::cout << numMarkers << " markers in markerArray \n";
+        else{
+            // Update redFrontiers with points
+            redFrontiers.push_back(m.points);
+        }
+        //std::cout << m.points.size() << " points in frontier " << i/2 << ". Frontier Red: " << (m.color.r == 1.0) << "\n";
+    } 
+}
+
+geometry_msgs::Point getCentroid(std::vector<geometry_msgs::Point> points){
+    //Calculates the centroid point given an array of points
+    geometry_msgs::Point centroidPoint;
+    float xAvg = 0.0;
+    float yAvg = 0.0;
+
+    if (points.size() > 0){
+        for(int i = 0; i < points.size(); i++){
+            xAvg += points[i].x;
+            yAvg += points[i].y;
+        }
+        xAvg = xAvg / points.size();
+        yAvg = yAvg / points.size();
+    }
+    centroidPoint.x = xAvg;
+    centroidPoint.y = yAvg;
+    centroidPoint.z = 0.0;
+    return centroidPoint;
+}
+
+geometry_msgs::Point getClosestPoint(std::vector<geometry_msgs::Point> points, RobotPose robotPose){
+    geometry_msgs::Point closestPoint;
+    float distance, minD = std::numeric_limits<float>::infinity();
+
+    closestPoint.x = 0.0;
+    closestPoint.y = 0.0;
+    closestPoint.z = 0.0;
+
+    if (points.size() > 0){
+        for(int i = 0; i < points.size(); i++){
+            distance = dist(robotPose.x, robotPose.y, points[i].x, points[i].y);
+            if(distance < minD){
+                minD = distance;
+                closestPoint = points[i];
+            }
+        }
+    }
+    return closestPoint;
+}
+
+geometry_msgs::Point getFurthestPoint(std::vector<geometry_msgs::Point> points, RobotPose robotPose){
+    geometry_msgs::Point furthestPoint;
+    float distance, maxD = 0;
+
+    furthestPoint.x = 0.0;
+    furthestPoint.y = 0.0;
+    furthestPoint.z = 0.0;
+
+    if (points.size() > 0){
+        for(int i = 0; i < points.size(); i++){
+            distance = dist(robotPose.x, robotPose.y, points[i].x, points[i].y);
+            if(distance > maxD){
+                maxD = distance;
+                furthestPoint = points[i];
+            }
+        }
+    }
+    return furthestPoint;
+}
+
+std::vector<int> orderCentroidIndices(std::vector<std::vector<geometry_msgs::Point>> frontiers, RobotPose robotPose){
+    geometry_msgs::Point point;
+    float d;
+    std::vector<float> distances;
+    std::vector<int> indices;
+    std::vector<std::pair<float, int>> distances_and_indices;
+
+    for(int i = 0; i < frontiers.size(); i++){
+        point = getCentroid(frontiers[i]);
+        //distances.push_back(dist(robotPose.x, robotPose.y, point.x, point.y));
+        //indices.push_back(i)
+        d = dist(robotPose.x, robotPose.y, point.x, point.y);
+        distances_and_indices.push_back(std::make_pair(d, i));
+    }
+    
+    std::sort(distances_and_indices.begin(), distances_and_indices.end());
+
+    for(int i = 0; i < distances_and_indices.size(); i++){
+        indices.push_back(distances_and_indices[i].second);
+    }
+
+    return indices;
 }
 
 uint8_t bumper[3] = {kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED};
@@ -85,7 +165,7 @@ void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
             } 
         }
     }
-    ROS_INFO("Min Laser Distance: %f \n Left: %f \n Right: %f \n LSum: %f \n RSum: %f", minLaserDist, minLSLaserDist, minRSLaserDist, LSLaserSum, RSLaserSum);
+    //ROS_INFO("Min Laser Distance: %f \n Left: %f \n Right: %f \n LSum: %f \n RSum: %f", minLaserDist, minLSLaserDist, minRSLaserDist, LSLaserSum, RSLaserSum);
 }
 
 float omega = 0.0, accX = 0.0, accY = 0.0, yaw_imu = 0.0;
@@ -95,6 +175,10 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
     accY = msg->linear_acceleration.y;
     yaw_imu = tf::getYaw(msg->orientation);
     //ROS_INFO("Acceleration: (%f, %f) \n IMU Yaw: %f deg Omega %f", accX, accY, RAD2DEG(yaw_imu), omega);
+}
+
+void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
+    std::cout << "Emotion: " << msg->data << " \n\n\n\n\n\n\n";
 }
 
 void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed,
@@ -109,11 +193,6 @@ void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSec
     // Update the timer.
     *pSecondsElapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now()-start).count();
     ros::Duration(0.01).sleep();
-}
-
-float dist(float x1, float y1, float x2, float y2){
-    //Calculates the Euclidean distance between two points (x1, y1), (x2, y2)
-    return sqrt(pow(x2-x1, 2) + pow(y2-y1, 2));
 }
 
 template <class T>
@@ -173,13 +252,7 @@ void rotateThruAngle(float angleRAD, float angleSpeed, float yawStart, float set
             ROS_INFO("Breaking out of rotate due to bumper press \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
             break;
         }
-        /*if(fabs(omega) < 0.035 && i > 250){
-            ROS_INFO("Moving forward and braking out. Likely stuck.");
-            moveThruDistance(0.1, 0.1, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            break;
-        }*/
-    
-        i +=1;
+        i += 1;
     }
 }
 
@@ -222,21 +295,121 @@ void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, u
        
         if (bumper[LEFT]){
             ROS_INFO("Left hit. Move back and spin 90 CW");
-            moveThruDistance(-0.8, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(DEG2RAD(-90), M_PI/6, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(DEG2RAD(-90), M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
         else if (bumper[RIGHT]){
             ROS_INFO("Right hit. Move back and spin 90 CCW");
-            moveThruDistance(-0.8, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(DEG2RAD(90), M_PI/6, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(DEG2RAD(90), M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
         else if (bumper[CENTER]){
             ROS_INFO("Center hit. Move back and spin");
-            moveThruDistance(-0.8, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(M_PI - 0.01, M_PI/6, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(M_PI - 0.01, M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
     }
 }
+
+bool checkPlan(ros::NodeHandle& nh, float xStart, float yStart, float phiStart, float xGoal, float yGoal, float phiGoal){
+	//Returns true if there is a valid path from (xStart, yStart, phiStart) to (xGoal, yGoal, phiGoal)
+    //Adapted from https://answers.ros.org/question/264369/move_base-make_plan-service-is-returning-an-empty-path/
+    
+    bool callExecuted, validPlan;
+
+    //Set start position
+    geometry_msgs::PoseStamped start;
+    geometry_msgs::Quaternion phi1 = tf::createQuaternionMsgFromYaw(phiStart);
+    start.header.seq = 0;
+    start.header.stamp = ros::Time::now();
+    start.header.frame_id = "map";
+    start.pose.position.x = xStart;
+    start.pose.position.y = yStart;
+    start.pose.position.z = 0.0;
+    start.pose.orientation.x = 0.0;
+    start.pose.orientation.y = 0.0;
+    start.pose.orientation.z = phi1.z;
+    start.pose.orientation.w = phi1.w;
+
+    //Set goal position
+    geometry_msgs::PoseStamped goal;
+    geometry_msgs::Quaternion phi2 = tf::createQuaternionMsgFromYaw(phiGoal);
+    goal.header.seq = 0;
+    goal.header.stamp = ros::Time::now();
+    goal.header.frame_id = "map";
+    goal.pose.position.x = xGoal;
+    goal.pose.position.y = yGoal;
+    goal.pose.position.z = 0.0;
+    goal.pose.orientation.x = 0.0;
+    goal.pose.orientation.y = 0.0;
+    goal.pose.orientation.z = phi2.z;
+    goal.pose.orientation.w = phi2.w;
+    
+    //Set up the service and call it
+    ros::ServiceClient check_path = nh.serviceClient<nav_msgs::GetPlan>("move_base/NavfnROS/make_plan");
+    nav_msgs::GetPlan srv;
+    srv.request.start = start;
+    srv.request.goal = goal;
+    srv.request.tolerance = 0.0;
+    callExecuted = check_path.call(srv);
+    
+    if(callExecuted){
+        ROS_INFO("Call to check plan sent");
+    }
+    else{
+        ROS_INFO("Call to check plan NOT sent");
+    }
+
+    if(srv.response.plan.poses.size() > 0){
+        validPlan = true;
+        ROS_INFO("Successful plan of size %ld", srv.response.plan.poses.size());
+    }
+    else{
+        validPlan = false;
+        ROS_INFO("Unsuccessful plan");
+    }
+    return validPlan;
+}
+
+bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, std::vector<float> angles, ros::NodeHandle& n, RobotPose robotPose){
+    // Navigates to startPoint and points adjacent defined by radii and angles
+    bool validPlan, navSuccess;
+    float xx, yy;
+
+    // Check if valid navigation plan to the startPoint exists
+    xx = startPoint.x;
+    yy = startPoint.y;
+    validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, 0.0);
+
+    //Try points at different radii and angles from the centroid     
+    for(int rCount = 0; rCount < radii.size(); rCount ++){
+        for(int aCount = 0; aCount < angles.size(); aCount ++){
+            if(!validPlan){
+                //ROS_INFO("Testing at offset r=%.2f phi=%.2f", radii[rCount], angles[aCount]);
+                std::cout << "Testing at offset r=" << radii[rCount] << " phi=" << angles[aCount] << "\n";
+                xx = startPoint.x + radii[rCount]*cosf(angles[aCount]);
+                yy = startPoint.y + radii[rCount]*sinf(angles[aCount]);
+                validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, 0.0);
+            }
+            else {
+                break;
+            }
+        }
+        if(validPlan){
+            break;
+        }
+    }
+
+    if(validPlan){
+        navSuccess = Navigation::moveToGoal(xx, yy, robotPose.phi, 10);
+    }
+    if(!validPlan || !navSuccess){
+        std::cout << "Could not navigate to point. \n";
+        return false;
+    }
+    return true;
+}
+
 
 int main(int argc, char** argv) {
     // Setup ROS.
@@ -268,17 +441,31 @@ int main(int argc, char** argv) {
     ros::Subscriber imu_sub = n.subscribe("mobile_base/sensors/imu_data", 1, &imuCallback);
     ros::Subscriber laser_sub = n.subscribe("scan", 10, &laserCallback);
     ros::Subscriber frontier_sub = n.subscribe("contest3/frontiers", 10, &markerCallback);
+    ros::Subscriber emotion_sub = n.subscribe("/detected_emotion", 1, &emotionCallback);
+   
+
+    // Robot pose object + subscriber.
+    RobotPose robotPose(0,0,0);
+    ros::Subscriber amclSub = n.subscribe("/amcl_pose", 1, &RobotPose::poseCallback, &robotPose);
     
-    bool exploring = true;
-    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1;
-    int checkStuckCount = 0, clearPathIters = 0;
+    bool exploring = true, validPlan = true, navSuccess = false;
+    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1, rotationSpeed = M_PI/6;
+    int checkStuckCount = 0, clearPathIters = 0, breakCounter = 0, idx = 0, prevNumRed = 0;
+    int maxCPIters = 800, maxStuckIters = 1000;
     float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0;
+    float xx, yy;
+    geometry_msgs::Point point;
+    
+    std::vector<int> redFrontiersSortedIndices;
+    std::vector<float> radii = {1.5, 1.0, 2.0, 2.5, 3.0, 0.5};
+    std::vector<float> angles = {0.0, M_PI/3, -M_PI/3, 2*M_PI/3, -2*M_PI/3, M_PI-0.01};
 
     // Contest count down timer
     std::chrono::time_point<std::chrono::system_clock> start;
     start = std::chrono::system_clock::now();
     uint64_t secondsElapsed = 0;
 
+    rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.1, &vel, &vel_pub, &secondsElapsed, start);
     while(ros::ok() && secondsElapsed <= 1200) {      
         explore.start();
         //colour1.value = RED;
@@ -288,85 +475,79 @@ int main(int argc, char** argv) {
         //ROS_INFO("Colour: %d", colour2.value);
         //led2_pub.publish(colour2);
 
-        prob = randBetween(0.0, 1.0);
-
         if(anyBumperPressed()){
             bumperPressedAction(&vel, &vel_pub, &secondsElapsed, start); 
         }
 
-        if (exploring && !anyBumperPressed() && minLaserDist < maxLaserThreshold){
-            if (minLaserDist > clearPathThreshold){
-                ROS_INFO("Clear path. Iter: %d", clearPathIters);
-                linear = 0.2;
-                angular = 0;
-                clearPathIters ++;
-                if (clearPathIters > 300){
-                    // Random movement 25% of the time if clear path
-                    if (randBetween(0.0, 1.0) < 0.25){
-                        rotateThruAngle(copysign(randBetween(-M_PI/6, M_PI/6), chooseAngular(200, 0.55)), M_PI/3, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
-                    }
-                    clearPathIters = 0;
+        /*if(exploring && allFrontiersRed){
+            // Force movement
+            linear = 0.25;
+            angular = 0;
+
+            //Rotate 10 to 45 in clearer direction 60% of the time
+            rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
+        }*/
+
+        /*if(!redFrontiers.empty()){
+            for(int i = 0; i < redFrontiers.size(); i++){
+                point = getCentroid(redFrontiers[i]);
+                ROS_INFO("Red Frontier %d: (%.2f, %.2f)", i, point.x, point.y);
+            }
+        }*/
+
+        if(redFrontiers.size() > prevNumRed){
+            std::cout << "New red frontier!!";
+            rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+        }
+        prevNumRed = redFrontiers.size();
+        
+
+        if(exploring && allFrontiersRed){
+            explore.start();
+            //Navigate to closest point of closest frontier(s)
+            if(redFrontiers.size() == 1){
+                point = getClosestPoint(redFrontiers[0], robotPose); 
+                navSuccess = navigateNearby(point, radii, angles, n, robotPose);
+                rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
+                if(allFrontiersRed){
+                    point = getFurthestPoint(redFrontiers[0], robotPose); 
+                    navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                 }
             }
-        }
-        if(exploring && checkStuckCount == 500){
-            std::cout << "Distance moved: " << dist(oldX, oldY, posX, posY) << "\n";
-            std::cout << "Angle moved: " << fabs(yaw - oldYaw) << "\n";
-            if(dist(oldX, oldY, posX, posY) < 0.5 && fabs(yaw - oldYaw) < 0.05){
-                std::cout << "Stuck! \n";
-                moveThruDistance(-0.55, 0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-                rotateThruAngle(2*M_PI - 0.01, M_PI/2, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-                //rotateThruAngle(randBetween(-M_PI/4, M_PI/4), M_PI/8, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+            else{
+                //Sort the red frontiers by distance closest to the turtlebot and try navigating
+                redFrontiersSortedIndices = orderCentroidIndices(redFrontiers, robotPose);
+                for(int i = 0; i < redFrontiersSortedIndices.size(); i++){
+                    idx = redFrontiersSortedIndices[i];
+                    //point = getCentroid(redFrontiers[idx]);
+                    point = getClosestPoint(redFrontiers[idx], robotPose);
+                    navSuccess = navigateNearby(point, radii, angles, n, robotPose);
+                    rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
+                    if(allFrontiersRed){
+                        point = getFurthestPoint(redFrontiers[idx], robotPose);
+                        navSuccess = navigateNearby(point, radii, angles, n, robotPose);
+                    }
+                }
+            } 
+            if(!navSuccess){
+                std::cout << "ALL NAV ATTEMPTS UNSUCCESSFUL! \n";
+                explore.start();
+                // Force movement
+                linear = 0.25;
+                angular = 0;
+
+                //Rotate 10 to 45 in clearer direction 60% of the time
+                moveThruDistance(0.85, 0.15, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+                rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
+                ros::spinOnce();
             }
-            oldX = posX;
-            oldY = posY;
-            oldYaw = yaw;
-            checkStuckCount = 0;
         }
 
-        if(exploring && redFrontier){
-            explore.start();
-        }
-
-        /*if(exploring && redFrontier){
-            ROS_INFO("FRONTIER RED! SPIN 360!");
-            rotateThruAngle(M_PI - 0.01, M_PI/2, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-            rotateThruAngle(M_PI - 0.01, M_PI/2, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-            //moveThruDistance(0.6, 0.2, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-        }*/
-
-        /*if (exploring && secondsElapsed % 5 == 0){
-            ROS_INFO("RANDOM 45 TURN!");
-            explore.stop();
-            rotateThruAngle(randBetween(-M_PI/4, M_PI/4), M_PI/6, yaw, randBetween(0.0, 0.2), &vel, &vel_pub, &secondsElapsed, start);
-            //moveThruDistance(0.6, 0.2, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-            explore.start();
-        }*/
-
-
-       /* if (dist(oldX, oldY, posX, posY) < 0.5 && exploring){
-            checkStuckCount ++;
-        }
-        else{
-            ROS_INFO("Distance: %.1f. Resetting count", dist(oldX, oldY, posX, posY));
-            checkStuckCount = 0;
-            
-        }
-
-        if (checkStuckCount >= 750 && exploring){
-            rotateThruAngle(M_PI - 0.01, M_PI/6, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-            rotateThruAngle(M_PI - 0.01, M_PI/6, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-            checkStuckCount = 0;
-            
-        }
-        ROS_INFO("Stuck count: %d", checkStuckCount);
-
-        oldX = posX, oldY = posY;*/
-        //std::cout << "Stuck count: " << checkStuckCount << "\n";
-        checkStuckCount ++;
         ros::spinOnce();
         secondsElapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now()-start).count();
         ros::Duration(0.01).sleep();
     }
+    explore.stop();
+    std::cout << "20 MINUTES ELAPSED";
     return 0;
 }

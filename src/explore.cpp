@@ -182,16 +182,16 @@ void Explore::makePlan()
   auto pose = costmap_client_.getRobotPose();
   // get frontiers sorted according to cost
   auto frontiers = search_.searchFrom(pose.position);
-  //ROS_DEBUG("found %lu frontiers", frontiers.size());
-  std::cout << "found " << frontiers.size() << " frontiers \n";
+  ROS_DEBUG("found %lu frontiers", frontiers.size());
+  //std::cout << "found " << frontiers.size() << " frontiers \n";
   for (size_t i = 0; i < frontiers.size(); ++i) {
-    std::cout << "Frontier " << i << ". Cost: " << frontiers[i].cost << "\n";
-    //ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
+    //std::cout << "Frontier " << i << ". Cost: " << frontiers[i].cost << "\n";
+    ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
   }
 
   if (frontiers.empty()) {
     std::cout << "Frontiers Empty! Calling stop \n";
-    stop();
+    //stop();
     return;
   }
 
@@ -207,7 +207,7 @@ void Explore::makePlan()
                          return goalOnBlacklist(f.centroid);
                        });
   if (frontier == frontiers.end()) {
-    stop();
+    //stop();
     return;
   }
   geometry_msgs::Point target_position = frontier->centroid;
