@@ -48,7 +48,7 @@ catkin_package(INCLUDE_DIRS include CATKIN_DEPENDS message_runtime roscpp std_ms
 # 	CATKIN_DEPENDS message_runtime
 # )
 
-include_directories(include ${OpenCV_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+include_directories(include ${OpenCV_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
 
 add_executable(contest3
     src/contest3.cpp
@@ -59,4 +59,8 @@ add_executable(contest3
 target_link_libraries(contest3
     ${catkin_LIBRARIES}
     ${OpenCV_LIBRARIES}
+    ${ZLIB_LIBRARIES}
     )
+find_package(ZLIB)
+include_directories(${ZLIB_INCLUDE_DIRS})
+TARGET_LINK_LIBRARIES( ${ZLIB_LIBRARIES})
