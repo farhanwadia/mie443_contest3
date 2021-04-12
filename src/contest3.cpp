@@ -404,6 +404,8 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
 
     if(validPlan){
         navSuccess = Navigation::moveToGoal(xx, yy, atan2f(yy - robotPose.y, xx - robotPose.x), 10);
+        ros::spinOnce();
+        ros::Duration(0.01).sleep();
     }
     if(!allFrontiersRed){
         std::cout << "At least 1 frontier blue \n";
@@ -525,14 +527,15 @@ int main(int argc, char** argv) {
             if(redFrontiers.size() == 1){
                 point = getClosestPoint(redFrontiers[0], robotPose);
                 navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                //explore.stop();
-                //explore.start();
-                if (emotionDetected == -1 && redFrontiers.size() > 0){
+                explore.stop();
+                explore.start();
+                ros::Duration(0.01).sleep();
+                if (emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in 1 frontier red started \n";
                     rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                     std::cout << "Spin in 1 frontier red ended \n";
                 }
-                if(allFrontiersRed && emotionDetected == -1){
+                if(emotionDetected == -1 && allFrontiersRed){
                     ros::spinOnce();
                     point = getFurthestPoint(redFrontiers[0], robotPose); 
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
@@ -547,12 +550,12 @@ int main(int argc, char** argv) {
                     ros::spinOnce();
                     point = getClosestPoint(redFrontiers[idx], robotPose);
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                    //explore.stop();
+                    explore.stop();
                     explore.start();
                     if(emotionDetected != -1){break;}
                     if (emotionDetected == -1 && allFrontiersRed){
                         std::cout << "Spin in 2+ frontier red started \n";
-                        rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                        rotateThruAngle(copysign(randBetween(0.0, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                         std::cout << "Spin in 2+ frontier red ended \n";
                     }
                     if(emotionDetected == -1 && allFrontiersRed){
@@ -564,7 +567,7 @@ int main(int argc, char** argv) {
             } 
             if(!navSuccess && emotionDetected == -1 && allFrontiersRed){
                 std::cout << "ALL NAV ATTEMPTS UNSUCCESSFUL! \n";
-                //explore.stop();
+                explore.stop();
                 explore.start();
                 // Force movement
                 linear = 0.25;
