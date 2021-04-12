@@ -191,7 +191,7 @@ void Explore::makePlan()
 
   if (frontiers.empty()) {
     std::cout << "Frontiers Empty! Calling stop \n";
-    //stop();
+    stop();
     return;
   }
 
@@ -207,7 +207,7 @@ void Explore::makePlan()
                          return goalOnBlacklist(f.centroid);
                        });
   if (frontier == frontiers.end()) {
-    //stop();
+    stop();
     return;
   }
   geometry_msgs::Point target_position = frontier->centroid;

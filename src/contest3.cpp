@@ -92,7 +92,7 @@ geometry_msgs::Point getFurthestPoint(std::vector<geometry_msgs::Point> points, 
     return furthestPoint;
 }
 
-std::vector<int> orderCentroidIndices(std::vector<std::vector<geometry_msgs::Point>> frontiers, RobotPose robotPose){
+std::vector<int> orderIndices(std::vector<std::vector<geometry_msgs::Point>> frontiers, RobotPose robotPose){
     geometry_msgs::Point point;
     float d;
     std::vector<float> distances;
@@ -100,9 +100,7 @@ std::vector<int> orderCentroidIndices(std::vector<std::vector<geometry_msgs::Poi
     std::vector<std::pair<float, int>> distances_and_indices;
 
     for(int i = 0; i < frontiers.size(); i++){
-        point = getCentroid(frontiers[i]);
-        //distances.push_back(dist(robotPose.x, robotPose.y, point.x, point.y));
-        //indices.push_back(i)
+        point = getClosestPoint(frontiers[i], robotPose);
         d = dist(robotPose.x, robotPose.y, point.x, point.y);
         distances_and_indices.push_back(std::make_pair(d, i));
     }
@@ -177,8 +175,10 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
     //ROS_INFO("Acceleration: (%f, %f) \n IMU Yaw: %f deg Omega %f", accX, accY, RAD2DEG(yaw_imu), omega);
 }
 
+int emotionDetected = -1; //Use -1 to indicate exploring can occur again
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
-    std::cout << "Emotion: " << msg->data << " \n\n\n\n\n\n\n";
+    emotionDetected = msg->data;
+    std::cout << "Emotion Detected: " << emotionDetected << " \n";
 }
 
 void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed,
@@ -230,6 +230,7 @@ void moveThruDistance(float desired_dist, float move_speed, float startX, float 
         current_dist = dist(startX, startY, posX, posY);
         
         if (anyBumperPressed()){
+            bumperPressedAction(pVel, pVel_pub,pSecondsElapsed, start);
             break;
         }
         i+=1;
@@ -250,6 +251,7 @@ void rotateThruAngle(float angleRAD, float angleSpeed, float yawStart, float set
         
         if (anyBumperPressed()){
             ROS_INFO("Breaking out of rotate due to bumper press \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
+            bumperPressedAction(pVel, pVel_pub,pSecondsElapsed, start);
             break;
         }
         i += 1;
@@ -296,17 +298,17 @@ void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, u
         if (bumper[LEFT]){
             ROS_INFO("Left hit. Move back and spin 90 CW");
             moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(DEG2RAD(-90), M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(DEG2RAD(-90), M_PI/4, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
         else if (bumper[RIGHT]){
             ROS_INFO("Right hit. Move back and spin 90 CCW");
             moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(DEG2RAD(90), M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(DEG2RAD(90), M_PI/4, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
         else if (bumper[CENTER]){
             ROS_INFO("Center hit. Move back and spin");
             moveThruDistance(-1.2, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start);
-            rotateThruAngle(M_PI - 0.01, M_PI/3, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
+            rotateThruAngle(copysign(2*M_PI/3, chooseAngular(10, 0.9)), M_PI/4, yaw, 0, pVel, pVel_pub, pSecondsElapsed, start);
         }
     }
 }
@@ -379,29 +381,33 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
     // Check if valid navigation plan to the startPoint exists
     xx = startPoint.x;
     yy = startPoint.y;
-    validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, 0.0);
+    validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, atan2f(yy - robotPose.y, xx - robotPose.x));
 
     //Try points at different radii and angles from the centroid     
     for(int rCount = 0; rCount < radii.size(); rCount ++){
         for(int aCount = 0; aCount < angles.size(); aCount ++){
-            if(!validPlan){
+            if(!validPlan && allFrontiersRed){
                 //ROS_INFO("Testing at offset r=%.2f phi=%.2f", radii[rCount], angles[aCount]);
                 std::cout << "Testing at offset r=" << radii[rCount] << " phi=" << angles[aCount] << "\n";
                 xx = startPoint.x + radii[rCount]*cosf(angles[aCount]);
                 yy = startPoint.y + radii[rCount]*sinf(angles[aCount]);
-                validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, 0.0);
+                validPlan = checkPlan(n, robotPose.x, robotPose.y, robotPose.phi, xx, yy, atan2f(yy - robotPose.y, xx - robotPose.x));
             }
             else {
                 break;
             }
         }
-        if(validPlan){
+        if(validPlan || !allFrontiersRed){
             break;
         }
     }
 
     if(validPlan){
-        navSuccess = Navigation::moveToGoal(xx, yy, robotPose.phi, 10);
+        navSuccess = Navigation::moveToGoal(xx, yy, atan2f(yy - robotPose.y, xx - robotPose.x), 10);
+    }
+    if(!allFrontiersRed){
+        std::cout << "At least 1 frontier blue \n";
+        return false;
     }
     if(!validPlan || !navSuccess){
         std::cout << "Could not navigate to point. \n";
@@ -449,9 +455,9 @@ int main(int argc, char** argv) {
     ros::Subscriber amclSub = n.subscribe("/amcl_pose", 1, &RobotPose::poseCallback, &robotPose);
     
     bool exploring = true, validPlan = true, navSuccess = false;
-    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1, rotationSpeed = M_PI/6;
-    int checkStuckCount = 0, clearPathIters = 0, breakCounter = 0, idx = 0, prevNumRed = 0;
-    int maxCPIters = 800, maxStuckIters = 1000;
+    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1, rotationSpeed = M_PI/4;
+    int checkStuckCount = 0, clearPathIters = 0, idx = 0, prevNumRed = 0;
+    int maxCPIters = 800, maxStuckIters = 1000, distUpdateIters = 400;
     float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0;
     float xx, yy;
     geometry_msgs::Point point;
@@ -465,7 +471,9 @@ int main(int argc, char** argv) {
     start = std::chrono::system_clock::now();
     uint64_t secondsElapsed = 0;
 
+    std::cout << "Spin 1 started \n";
     rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.1, &vel, &vel_pub, &secondsElapsed, start);
+    std::cout << "Spin 1 complete \n";
     while(ros::ok() && secondsElapsed <= 1200) {      
         explore.start();
         //colour1.value = RED;
@@ -475,71 +483,107 @@ int main(int argc, char** argv) {
         //ROS_INFO("Colour: %d", colour2.value);
         //led2_pub.publish(colour2);
 
+        /*if(emotionDetected == -1){
+            exploring = true;
+        }
+        else{
+            exploring = false;
+        }*/
+
+        if(emotionDetected >=0){
+            explore.stop();
+            ROS_INFO("Emotion detected %d", emotionDetected);
+            //Do actions here
+            for(int i=0; i<321; i++){
+                std::cout << "Farhan " << emotionDetected << " \n";
+            }
+            //Emotion responses finished
+            emotionDetected = -1;
+            explore.start();
+        }
+        
         if(anyBumperPressed()){
             bumperPressedAction(&vel, &vel_pub, &secondsElapsed, start); 
         }
 
-        /*if(exploring && allFrontiersRed){
-            // Force movement
-            linear = 0.25;
-            angular = 0;
-
-            //Rotate 10 to 45 in clearer direction 60% of the time
-            rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
-        }*/
-
-        /*if(!redFrontiers.empty()){
-            for(int i = 0; i < redFrontiers.size(); i++){
-                point = getCentroid(redFrontiers[i]);
-                ROS_INFO("Red Frontier %d: (%.2f, %.2f)", i, point.x, point.y);
+        if(emotionDetected == -1){
+            if(redFrontiers.size() > prevNumRed){
+                std::cout << "New red frontier!!";
+                //explore.stop();
+                //moveThruDistance(-0.6, 0.25, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+                //rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
+                //explore.start();
+                                
             }
-        }*/
-
-        if(redFrontiers.size() > prevNumRed){
-            std::cout << "New red frontier!!";
-            rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+            prevNumRed = redFrontiers.size();
         }
-        prevNumRed = redFrontiers.size();
-        
 
-        if(exploring && allFrontiersRed){
+        if(emotionDetected == -1 && allFrontiersRed){
             explore.start();
+            ros::spinOnce();
             //Navigate to closest point of closest frontier(s)
             if(redFrontiers.size() == 1){
-                point = getClosestPoint(redFrontiers[0], robotPose); 
+                point = getClosestPoint(redFrontiers[0], robotPose);
                 navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
-                if(allFrontiersRed){
+                //explore.stop();
+                //explore.start();
+                if (emotionDetected == -1 && redFrontiers.size() > 0){
+                    std::cout << "Spin in 1 frontier red started \n";
+                    rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                    std::cout << "Spin in 1 frontier red ended \n";
+                }
+                if(allFrontiersRed && emotionDetected == -1){
+                    ros::spinOnce();
                     point = getFurthestPoint(redFrontiers[0], robotPose); 
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                 }
             }
             else{
                 //Sort the red frontiers by distance closest to the turtlebot and try navigating
-                redFrontiersSortedIndices = orderCentroidIndices(redFrontiers, robotPose);
+                redFrontiersSortedIndices = orderIndices(redFrontiers, robotPose);
                 for(int i = 0; i < redFrontiersSortedIndices.size(); i++){
                     idx = redFrontiersSortedIndices[i];
                     //point = getCentroid(redFrontiers[idx]);
+                    ros::spinOnce();
                     point = getClosestPoint(redFrontiers[idx], robotPose);
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                    rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
-                    if(allFrontiersRed){
+                    //explore.stop();
+                    explore.start();
+                    if(emotionDetected != -1){break;}
+                    if (emotionDetected == -1 && allFrontiersRed){
+                        std::cout << "Spin in 2+ frontier red started \n";
+                        rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                        std::cout << "Spin in 2+ frontier red ended \n";
+                    }
+                    if(emotionDetected == -1 && allFrontiersRed){
+                        ros::spinOnce();
                         point = getFurthestPoint(redFrontiers[idx], robotPose);
                         navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                     }
                 }
             } 
-            if(!navSuccess){
+            if(!navSuccess && emotionDetected == -1 && allFrontiersRed){
                 std::cout << "ALL NAV ATTEMPTS UNSUCCESSFUL! \n";
+                //explore.stop();
                 explore.start();
                 // Force movement
                 linear = 0.25;
                 angular = 0;
+                ros::spinOnce();
 
                 //Rotate 10 to 45 in clearer direction 60% of the time
-                moveThruDistance(0.85, 0.15, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-                rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.25, &vel, &vel_pub, &secondsElapsed, start);
-                ros::spinOnce();
+                if(emotionDetected == -1 && allFrontiersRed){
+                    moveThruDistance(0.85, 0.15, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+                    //explore.stop();
+                    //explore.start();
+                }
+                if(emotionDetected == -1 && allFrontiersRed){
+                    std::cout << "Spin in all nav failed started \n";
+                    rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                    //explore.stop();
+                    //explore.start();
+                    std::cout << "Spin in all nav failed ended \n";
+                }
             }
         }
 
