@@ -178,7 +178,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
 int emotionDetected = -1; //Use -1 to indicate exploring can occur again
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
     emotionDetected = msg->data;
-    std::cout << "Emotion Detected: " << emotionDetected << " \n";
+    std::cout << "callback. Emotion Detected: " << emotionDetected << " \n";
 }
 
 void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed,
@@ -418,153 +418,53 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
     return true;
 }
 
-void robotReaction(int max_idx){
-    int humanEmotion = max_idx;
-
+void robotReaction(){
     sound_play::SoundClient sc;
+    ros::Duration(0.01).sleep();
+
+    using namespace cv;
+    using namespace std;
+
+    // 0=Angry --> embarrased
+    // 1=Disgust --> disgust
+    // 2=Fear --> sad
+    // 3=Happy --> resentment 
+    // 4=Sad --> positively excited
+    // 5=Surprise --> surprise
+    // 6=Neutral --> pride  
     
-    switch(humanEmotion){
-        using namespace cv;
-        using namespace std;
-        //0=Angry --> embarrasment
-        case '0':{
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/embarrasment.jpeg", CV_LOAD_IMAGE_UNCHANGED);
+    string imagePaths[7] = {"/home/turtlebot/catkin_ws/src/mie443_contest3/images/embarrasment.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/disgust.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/sad.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/resentment.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/excited.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/surprise.jpeg",
+                            "/home/turtlebot/catkin_ws/src/mie443_contest3/images/proud.jpeg"};
+    
+    string soundFiles[7] = {"embarrasment.wav",
+                            "disgust.wav",
+                            "sad.wav",
+                            "resentment.wav",
+                            "happy.wav",
+                            "surprise.wav",
+                            "proud.wav"};
+    
+    if(emotionDetected >= 0 && emotionDetected <= 6){
+        Mat Image = imread(imagePaths[emotionDetected], CV_LOAD_IMAGE_UNCHANGED);
 
-            if (Image.empty()){
+        if (Image.empty()){
                 cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "embarrasment.wav");
-            break;
         }
-        // 1=Disgust --> disgust
-        case '1':{
 
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/disgust.jpeg", CV_LOAD_IMAGE_UNCHANGED);
+        namedWindow("robotEmotion", CV_WINDOW_NORMAL);
+        imshow("robotEmotion", Image);
 
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
+        waitKey(5000);
 
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
+        destroyWindow("robotEmotion");
 
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "disgust.wav");
-            break;
-        }
-        // 2=Fear --> sad
-        case '2':{
-
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/sad.jpeg", CV_LOAD_IMAGE_UNCHANGED);
-
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "sad.wav");
-            break;
-        }
-        // 3=Happy --> resentment 
-        case '3':{
-
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/resentment.jpeg", CV_LOAD_IMAGE_UNCHANGED);
-
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "resentment.wav");
-            break;
-        }
-        // 4=Sad --> positively excited
-        case '4':{
-
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/excited.jpeg", CV_LOAD_IMAGE_UNCHANGED);
-
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "happy.wav");
-            break;
-        }
-        // 5=Surprise --> surprise
-        case '5':{
-
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/surprise.jpeg", CV_LOAD_IMAGE_UNCHANGED);
-
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "surprise.wav");
-            break;
-        }
-        // 6=Neutral --> pride
-        case '6':{
-
-            Mat Image = imread("/home/turtlebot/catkin_ws/src/mie443_contest3/images/proud.jpeg", CV_LOAD_IMAGE_UNCHANGED);
-
-            if (Image.empty()){
-                cout << "Error loading image" << endl;
-            }
-
-            namedWindow("robotEmotion", CV_WINDOW_NORMAL);
-            imshow("robotEmotion", Image);
-
-            waitKey(5000);
-
-            destroyWindow("robotEmotion");
-
-            std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-            sc.playWave(path_to_sounds + "proud.wav");
-            break;
-        }
+        std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
+        sc.playWave(path_to_sounds + soundFiles[emotionDetected]);     
     }
 }
 
@@ -577,15 +477,10 @@ int main(int argc, char** argv) {
     explore::Explore explore;
     
     // Class to handle sounds.
-    sound_play::SoundClient sc;
+    //sound_play::SoundClient sc;
+    //ros::Duration(0.01).sleep()
 
-    // 0=Angry --> embarrased
-    // 1=Disgust --> disgust
-    // 2=Fear --> sad
-    // 3=Happy --> resentment 
-    // 4=Sad --> positively excited
-    // 5=Surprise --> surprise
-    // 6=Neutral --> pride   
+ 
 
     // The code below shows how to play a sound.
     //std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
@@ -612,11 +507,9 @@ int main(int argc, char** argv) {
     RobotPose robotPose(0,0,0);
     ros::Subscriber amclSub = n.subscribe("/amcl_pose", 1, &RobotPose::poseCallback, &robotPose);
     
-    bool exploring = true, validPlan = true, navSuccess = false;
-    float oldX = posX, oldY = posY, oldYaw = yaw, prob = 1, rotationSpeed = M_PI/4;
-    int checkStuckCount = 0, clearPathIters = 0, idx = 0, prevNumRed = 0;
-    int maxCPIters = 800, maxStuckIters = 1000, distUpdateIters = 400;
-    float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0;
+    bool validPlan = true, navSuccess = false;
+    float oldX = posX, oldY = posY, rotationSpeed = M_PI/4;
+    int idx = 0, prevNumRed = 0;
     float xx, yy;
     geometry_msgs::Point point;
     
@@ -641,20 +534,13 @@ int main(int argc, char** argv) {
         //ROS_INFO("Colour: %d", colour2.value);
         //led2_pub.publish(colour2);
 
-        /*if(emotionDetected == -1){
-            exploring = true;
-        }
-        else{
-            exploring = false;
-        }*/
-
+       
         if(emotionDetected >=0){
             explore.stop();
             ROS_INFO("Emotion detected %d", emotionDetected);
             //Do actions here
-            for(int i=0; i<321; i++){
-                std::cout << "Farhan " << emotionDetected << " \n";
-            }
+            std::cout << "Entering robotReaction \n";
+            robotReaction();
             //Emotion responses finished
             emotionDetected = -1;
             explore.start();
@@ -667,10 +553,10 @@ int main(int argc, char** argv) {
         if(emotionDetected == -1){
             if(redFrontiers.size() > prevNumRed){
                 std::cout << "New red frontier!!";
-                //explore.stop();
-                //moveThruDistance(-0.6, 0.25, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-                //rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
-                //explore.start();
+                /*explore.stop();
+                moveThruDistance(-0.6, 0.25, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
+                rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
+                explore.start();*/
                                 
             }
             prevNumRed = redFrontiers.size();

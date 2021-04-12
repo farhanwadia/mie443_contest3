@@ -19,6 +19,9 @@
 #include <robot_pose.h>
 #include <navigation.h>
 #include <std_msgs/Int32.h>
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 
 #define N_BUMPER (3)
 #define RAD2DEG(rad) ((rad)*180./M_PI)
@@ -68,6 +71,8 @@ void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, u
 bool checkPlan(ros::NodeHandle& nh, float xStart, float yStart, float phiStart, float xGoal, float yGoal, float phiGoal);
 
 bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, std::vector<float> angles, ros::NodeHandle& n, RobotPose robotPose);
+
+void robotReaction();
 
 int main(int argc, char** argv);
 
