@@ -31,7 +31,7 @@ class EmotionDetector(object):
         self.vis = args.vis
         print('Setting up subscribers.')
         self.emotion_sub = rospy.Subscriber('/emotion_img', EmotionFaceMsg, self.emotionsub)
-        self.emotion_pub = rospy.Publisher('/detected_emotion', Int32, self.emotionsub, queue_size=1)
+        self.emotion_pub = rospy.Publisher('/detected_emotion', Int32, queue_size=1)
         self.emotion_file = open('detectedVictim.txt', 'w')
 
     def showImBatch(self, imgs):

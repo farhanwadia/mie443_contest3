@@ -183,11 +183,14 @@ void Explore::makePlan()
   // get frontiers sorted according to cost
   auto frontiers = search_.searchFrom(pose.position);
   ROS_DEBUG("found %lu frontiers", frontiers.size());
+  //std::cout << "found " << frontiers.size() << " frontiers \n";
   for (size_t i = 0; i < frontiers.size(); ++i) {
+    //std::cout << "Frontier " << i << ". Cost: " << frontiers[i].cost << "\n";
     ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
   }
 
   if (frontiers.empty()) {
+    std::cout << "Frontiers Empty! Calling stop \n";
     stop();
     return;
   }
@@ -208,7 +211,6 @@ void Explore::makePlan()
     return;
   }
   geometry_msgs::Point target_position = frontier->centroid;
-
   // time out if we are not making any progress
   bool same_goal = prev_goal_ == target_position;
   prev_goal_ = target_position;
@@ -220,7 +222,7 @@ void Explore::makePlan()
   // black list if we've made no progress for a long time
   if (ros::Time::now() - last_progress_ > progress_timeout_) {
     frontier_blacklist_.push_back(target_position);
-    ROS_DEBUG("Adding current goal to black list");
+    std::cout << "Adding current goal to black list";
     makePlan();
     return;
   }
@@ -234,6 +236,7 @@ void Explore::makePlan()
   move_base_msgs::MoveBaseGoal goal;
   goal.target_pose.pose.position = target_position;
   goal.target_pose.pose.orientation.w = 1.;
+
   goal.target_pose.header.frame_id = costmap_client_.getGlobalFrameID();
   goal.target_pose.header.stamp = ros::Time::now();
   move_base_client_.sendGoal(
