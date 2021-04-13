@@ -420,8 +420,7 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
 
 void robotReaction(){
     sound_play::SoundClient sc;
-    ros::Duration(0.01).sleep();
-
+    
     using namespace cv;
     using namespace std;
 
@@ -464,6 +463,7 @@ void robotReaction(){
         destroyWindow("robotEmotion");
 
         std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
+        ros::Duration(0.01).sleep();
         sc.playWave(path_to_sounds + soundFiles[emotionDetected]);     
     }
 }
@@ -479,8 +479,6 @@ int main(int argc, char** argv) {
     // Class to handle sounds.
     //sound_play::SoundClient sc;
     //ros::Duration(0.01).sleep()
-
- 
 
     // The code below shows how to play a sound.
     //std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
@@ -574,7 +572,7 @@ int main(int argc, char** argv) {
                 ros::Duration(0.01).sleep();
                 if (emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in 1 frontier red started \n";
-                    rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                    rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                     std::cout << "Spin in 1 frontier red ended \n";
                 }
                 if(emotionDetected == -1 && allFrontiersRed){
@@ -597,7 +595,7 @@ int main(int argc, char** argv) {
                     if(emotionDetected != -1){break;}
                     if (emotionDetected == -1 && allFrontiersRed){
                         std::cout << "Spin in 2+ frontier red started \n";
-                        rotateThruAngle(copysign(randBetween(0.0, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
+                        rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                         std::cout << "Spin in 2+ frontier red ended \n";
                     }
                     if(emotionDetected == -1 && allFrontiersRed){
