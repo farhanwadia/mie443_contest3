@@ -418,20 +418,13 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
     return true;
 }
 
-void robotReaction(){
-    sound_play::SoundClient sc;
-    
+void robotReaction(){  
     using namespace cv;
     using namespace std;
 
-    // 0=Angry --> embarrased
-    // 1=Disgust --> disgust
-    // 2=Fear --> sad
-    // 3=Happy --> resentment 
-    // 4=Sad --> positively excited
-    // 5=Surprise --> surprise
-    // 6=Neutral --> pride  
-    
+    string humanEmotions[7] = {"angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"};
+    string robotEmotions[7] = {"embarrasment", "disgust", "sadness", "resentment", "positive excitement", "surprise", "pride"};
+        
     string imagePaths[7] = {"/home/turtlebot/catkin_ws/src/mie443_contest3/images/embarrasment.jpeg",
                             "/home/turtlebot/catkin_ws/src/mie443_contest3/images/disgust.jpeg",
                             "/home/turtlebot/catkin_ws/src/mie443_contest3/images/sad.jpeg",
@@ -447,8 +440,11 @@ void robotReaction(){
                             "happy.wav",
                             "surprise.wav",
                             "proud.wav"};
+    int soundLengths[7] = {17000, 15000, 17000, 15000, 13000, 14000, 17000};
     
     if(emotionDetected >= 0 && emotionDetected <= 6){
+        cout << "Detected " << humanEmotions[emotionDetected] << ". Responding with " << robotEmotions[emotionDetected] << "\n";
+        
         Mat Image = imread(imagePaths[emotionDetected], CV_LOAD_IMAGE_UNCHANGED);
 
         if (Image.empty()){
@@ -458,13 +454,14 @@ void robotReaction(){
         namedWindow("robotEmotion", CV_WINDOW_NORMAL);
         imshow("robotEmotion", Image);
 
-        waitKey(5000);
+        waitKey(6000);
 
         destroyWindow("robotEmotion");
 
         std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-        ros::Duration(0.01).sleep();
-        sc.playWave(path_to_sounds + soundFiles[emotionDetected]);     
+        sound_play::SoundClient sc;
+        ros::Duration(1.0).sleep();
+        sc.playWave(path_to_sounds + soundFiles[emotionDetected]);   
     }
 }
 
@@ -537,7 +534,6 @@ int main(int argc, char** argv) {
             explore.stop();
             ROS_INFO("Emotion detected %d", emotionDetected);
             //Do actions here
-            std::cout << "Entering robotReaction \n";
             robotReaction();
             //Emotion responses finished
             emotionDetected = -1;
@@ -554,8 +550,7 @@ int main(int argc, char** argv) {
                 /*explore.stop();
                 moveThruDistance(-0.6, 0.25, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
                 rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
-                explore.start();*/
-                                
+                explore.start();*/               
             }
             prevNumRed = redFrontiers.size();
         }
@@ -567,9 +562,7 @@ int main(int argc, char** argv) {
             if(redFrontiers.size() == 1){
                 point = getClosestPoint(redFrontiers[0], robotPose);
                 navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                explore.stop();
-                explore.start();
-                ros::Duration(0.01).sleep();
+                ros::spinOnce();
                 if (emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in 1 frontier red started \n";
                     rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
@@ -590,21 +583,23 @@ int main(int argc, char** argv) {
                     ros::spinOnce();
                     point = getClosestPoint(redFrontiers[idx], robotPose);
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
-                    explore.stop();
-                    explore.start();
+                    ros::spinOnce();
                     if(emotionDetected != -1){break;}
                     if (emotionDetected == -1 && allFrontiersRed){
                         std::cout << "Spin in 2+ frontier red started \n";
                         rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                         std::cout << "Spin in 2+ frontier red ended \n";
                     }
+                    ros::spinOnce();
                     if(emotionDetected == -1 && allFrontiersRed){
                         ros::spinOnce();
                         point = getFurthestPoint(redFrontiers[idx], robotPose);
+                        
                         navSuccess = navigateNearby(point, radii, angles, n, robotPose);
+                        ros::spinOnce();
                     }
                 }
-            } 
+            }
             if(!navSuccess && emotionDetected == -1 && allFrontiersRed){
                 std::cout << "ALL NAV ATTEMPTS UNSUCCESSFUL! \n";
                 explore.stop();
@@ -617,14 +612,10 @@ int main(int argc, char** argv) {
                 //Rotate 10 to 45 in clearer direction 60% of the time
                 if(emotionDetected == -1 && allFrontiersRed){
                     moveThruDistance(0.85, 0.15, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
-                    //explore.stop();
-                    //explore.start();
                 }
                 if(emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in all nav failed started \n";
                     rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
-                    //explore.stop();
-                    //explore.start();
                     std::cout << "Spin in all nav failed ended \n";
                 }
             }

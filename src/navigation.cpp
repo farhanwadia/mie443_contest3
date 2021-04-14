@@ -1,11 +1,18 @@
 #include <navigation.h>
-#include <actionlib/client/simple_action_client.h>
-#include <move_base_msgs/MoveBaseAction.h>
-#include <tf/transform_datatypes.h>
+
+//bool cancelGoals = false;
+void feedbackCb(const move_base_msgs::MoveBaseFeedback::ConstPtr& feedback){
+    std::cout << "In feedback callback \n";
+    ros::spinOnce();
+    if(emotionDetected != -1){
+        std::cout << "Cancelling goal due to emotion detected! \n";
+        //cancelGoals = true;
+    }
+}
 
 bool Navigation::moveToGoal(float xGoal, float yGoal, float phiGoal, float timeout){
 	// Set up and wait for actionClient.
-    actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> ac("move_base", true);
+    MoveBaseClient ac("move_base", true);
     while(!ac.waitForServer(ros::Duration(5.0))){
         ROS_INFO("Waiting for the move_base action server to come up");
     }
@@ -23,7 +30,8 @@ bool Navigation::moveToGoal(float xGoal, float yGoal, float phiGoal, float timeo
     goal.target_pose.pose.orientation.w = phi.w;
     ROS_INFO("Sending goal location ...");
 	// Send goal and wait for response.
-    ac.sendGoal(goal);
+    ac.sendGoal(goal, MoveBaseClient::SimpleDoneCallback(), MoveBaseClient::SimpleActiveCallback(), &feedbackCb);
+    //ac.sendGoal(goal);
     ac.waitForResult(ros::Duration(timeout));
     if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
         ROS_INFO("You have reached the destination");
