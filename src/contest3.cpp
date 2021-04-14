@@ -8,6 +8,8 @@ float dist(float x1, float y1, float x2, float y2){
 bool allFrontiersRed = false; // return true if ALL frontiers are red
 std::vector<std::vector<geometry_msgs::Point>> redFrontiers;
 void markerCallback(const visualization_msgs::MarkerArray::ConstPtr& msg){
+    // Checks if all frontiers are red
+    // Also updates a vector of vectors corresponding to current red frontiers
     visualization_msgs::Marker m;
     int numMarkers;
     numMarkers = msg->markers.size();
@@ -33,7 +35,7 @@ void markerCallback(const visualization_msgs::MarkerArray::ConstPtr& msg){
 }
 
 geometry_msgs::Point getCentroid(std::vector<geometry_msgs::Point> points){
-    //Calculates the centroid point given an array of points
+    // Calculates the centroid point (average in each dimension) given an array of points
     geometry_msgs::Point centroidPoint;
     float xAvg = 0.0;
     float yAvg = 0.0;
@@ -53,6 +55,8 @@ geometry_msgs::Point getCentroid(std::vector<geometry_msgs::Point> points){
 }
 
 geometry_msgs::Point getClosestPoint(std::vector<geometry_msgs::Point> points, RobotPose robotPose){
+    // Takes in a vector of points corresponding to a frontier and current robotPose
+    // Returns the closest point within the frontier
     geometry_msgs::Point closestPoint;
     float distance, minD = std::numeric_limits<float>::infinity();
 
@@ -73,6 +77,8 @@ geometry_msgs::Point getClosestPoint(std::vector<geometry_msgs::Point> points, R
 }
 
 geometry_msgs::Point getFurthestPoint(std::vector<geometry_msgs::Point> points, RobotPose robotPose){
+    // Takes in a vector of points corresponding to a frontier and current robotPose
+    // Returns the furthest point within the frontier
     geometry_msgs::Point furthestPoint;
     float distance, maxD = 0;
 
@@ -93,6 +99,8 @@ geometry_msgs::Point getFurthestPoint(std::vector<geometry_msgs::Point> points, 
 }
 
 std::vector<int> orderIndices(std::vector<std::vector<geometry_msgs::Point>> frontiers, RobotPose robotPose){
+    // Takes in a vector of red frontier vectors and current robotPose
+    // Returns a vector of indices corresponding to the frontiers sorted from closest to furthest
     geometry_msgs::Point point;
     float d;
     std::vector<float> distances;
@@ -175,7 +183,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
     //ROS_INFO("Acceleration: (%f, %f) \n IMU Yaw: %f deg Omega %f", accX, accY, RAD2DEG(yaw_imu), omega);
 }
 
-int emotionDetected = -1; //Use -1 to indicate exploring can occur again
+int emotionDetected = -1; //Use -1 to indicate exploring is occuring, 0-6 for emotions
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
     emotionDetected = msg->data;
     std::cout << "callback. Emotion Detected: " << emotionDetected << " \n";
@@ -259,7 +267,7 @@ void rotateThruAngle(float angleRAD, float angleSpeed, float yawStart, float set
 }
 
 float chooseAngular(float laserSideSumThreshold, float probSpinToLarger){
-    // Chooses the angular velocity and direction
+    // Chooses the angular velocity and direction based on clearer laser side and probability inputted
     // Can also call this in second argument of copysign() to only extract a direction (e.g. for a rotation)
     float prob = randBetween(0.0, 1.0), angular_vel = M_PI/8, maxLaserThreshold = 7;
     ros::spinOnce();
@@ -289,6 +297,7 @@ float chooseAngular(float laserSideSumThreshold, float probSpinToLarger){
 
 void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
                          const std::chrono::time_point<std::chrono::system_clock> start){
+    // Actions to implement if any bumpers get pressed
     bool any_bumper_pressed = true;
     any_bumper_pressed = anyBumperPressed();
     
@@ -374,7 +383,7 @@ bool checkPlan(ros::NodeHandle& nh, float xStart, float yStart, float phiStart, 
 }
 
 bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, std::vector<float> angles, ros::NodeHandle& n, RobotPose robotPose){
-    // Navigates to startPoint and points adjacent defined by radii and angles
+    // Navigates to startPoint, and if not successful, to adjacent points defined by radii and angles away
     bool validPlan, navSuccess;
     float xx, yy;
 
@@ -418,7 +427,8 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
     return true;
 }
 
-void robotReaction(){  
+void robotReaction(sound_play::SoundClient& sc){  
+    // Displays image and plays sound based on emotionDetected
     using namespace cv;
     using namespace std;
 
@@ -446,21 +456,14 @@ void robotReaction(){
         cout << "Detected " << humanEmotions[emotionDetected] << ". Responding with " << robotEmotions[emotionDetected] << "\n";
         
         Mat Image = imread(imagePaths[emotionDetected], CV_LOAD_IMAGE_UNCHANGED);
-
-        if (Image.empty()){
-                cout << "Error loading image" << endl;
-        }
+        if (Image.empty()){cout << "Error loading image" << endl;}
 
         namedWindow("robotEmotion", CV_WINDOW_NORMAL);
         imshow("robotEmotion", Image);
-
-        waitKey(6000);
-
+        waitKey(5000);
         destroyWindow("robotEmotion");
 
         std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-        sound_play::SoundClient sc;
-        ros::Duration(1.0).sleep();
         sc.playWave(path_to_sounds + soundFiles[emotionDetected]);   
     }
 }
@@ -474,12 +477,8 @@ int main(int argc, char** argv) {
     explore::Explore explore;
     
     // Class to handle sounds.
-    //sound_play::SoundClient sc;
-    //ros::Duration(0.01).sleep()
-
-    // The code below shows how to play a sound.
-    //std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
-    //sc.playWave(path_to_sounds + "sound.wav");
+    sound_play::SoundClient sc;
+    ros::Duration(0.5).sleep();
     
     // Publishers
     ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel_mux/input/teleop", 1);
@@ -534,7 +533,7 @@ int main(int argc, char** argv) {
             explore.stop();
             ROS_INFO("Emotion detected %d", emotionDetected);
             //Do actions here
-            robotReaction();
+            robotReaction(sc);
             //Emotion responses finished
             emotionDetected = -1;
             explore.start();
@@ -560,14 +559,17 @@ int main(int argc, char** argv) {
             ros::spinOnce();
             //Navigate to closest point of closest frontier(s)
             if(redFrontiers.size() == 1){
+                // Single red frontier
                 point = getClosestPoint(redFrontiers[0], robotPose);
                 navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                 ros::spinOnce();
+                // Spin 15-60 deg in place if frontiers still red
                 if (emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in 1 frontier red started \n";
                     rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                     std::cout << "Spin in 1 frontier red ended \n";
                 }
+                // Go to furthest point in frontier if still red
                 if(emotionDetected == -1 && allFrontiersRed){
                     ros::spinOnce();
                     point = getFurthestPoint(redFrontiers[0], robotPose); 
@@ -575,7 +577,9 @@ int main(int argc, char** argv) {
                 }
             }
             else{
-                //Sort the red frontiers by distance closest to the turtlebot and try navigating
+                // Multiple red frontiers
+                // Sort the red frontiers by distance closest to the turtlebot
+                // Try navigating to closest point of closest frontier
                 redFrontiersSortedIndices = orderIndices(redFrontiers, robotPose);
                 for(int i = 0; i < redFrontiersSortedIndices.size(); i++){
                     idx = redFrontiersSortedIndices[i];
@@ -585,21 +589,22 @@ int main(int argc, char** argv) {
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                     ros::spinOnce();
                     if(emotionDetected != -1){break;}
+                    // Spin 15-60 deg in place if all frontiers still red
                     if (emotionDetected == -1 && allFrontiersRed){
                         std::cout << "Spin in 2+ frontier red started \n";
                         rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                         std::cout << "Spin in 2+ frontier red ended \n";
                     }
-                    ros::spinOnce();
+                    // Go to furthest point in frontier if all still red
                     if(emotionDetected == -1 && allFrontiersRed){
                         ros::spinOnce();
                         point = getFurthestPoint(redFrontiers[idx], robotPose);
-                        
                         navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                         ros::spinOnce();
                     }
                 }
             }
+            // Do below if none of the above worked
             if(!navSuccess && emotionDetected == -1 && allFrontiersRed){
                 std::cout << "ALL NAV ATTEMPTS UNSUCCESSFUL! \n";
                 explore.stop();
