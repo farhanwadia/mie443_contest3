@@ -183,9 +183,7 @@ void Explore::makePlan()
   // get frontiers sorted according to cost
   auto frontiers = search_.searchFrom(pose.position);
   ROS_DEBUG("found %lu frontiers", frontiers.size());
-  //std::cout << "found " << frontiers.size() << " frontiers \n";
   for (size_t i = 0; i < frontiers.size(); ++i) {
-    //std::cout << "Frontier " << i << ". Cost: " << frontiers[i].cost << "\n";
     ROS_DEBUG("frontier %zd cost: %f", i, frontiers[i].cost);
   }
 

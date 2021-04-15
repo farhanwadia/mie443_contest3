@@ -26,8 +26,6 @@
 #include <move_base_msgs/MoveBaseAction.h>
 #include <tf/transform_datatypes.h>
 
-//typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
-
 #define N_BUMPER (3)
 #define RAD2DEG(rad) ((rad)*180./M_PI)
 #define DEG2RAD(deg) ((deg)*M_PI/180.)

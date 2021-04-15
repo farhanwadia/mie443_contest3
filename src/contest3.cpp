@@ -186,7 +186,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
 int emotionDetected = -1; //Use -1 to indicate exploring is occuring, 0-6 for emotions
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
     emotionDetected = msg->data;
-    std::cout << "callback. Emotion Detected: " << emotionDetected << " \n";
+    std::cout << "Emotion detected in its callback: " << emotionDetected << " \n";
 }
 
 void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed,
@@ -450,7 +450,6 @@ void robotReaction(sound_play::SoundClient& sc){
                             "happy.wav",
                             "surprise.wav",
                             "proud.wav"};
-    int soundLengths[7] = {17000, 15000, 17000, 15000, 13000, 14000, 17000};
     
     if(emotionDetected >= 0 && emotionDetected <= 6){
         cout << "Detected " << humanEmotions[emotionDetected] << ". Responding with " << robotEmotions[emotionDetected] << "\n";
@@ -484,10 +483,10 @@ int main(int argc, char** argv) {
     ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel_mux/input/teleop", 1);
     geometry_msgs::Twist vel; 
 
-    ros::Publisher led1_pub = n.advertise<kobuki_msgs::Led>("mobile_base/commands/led1", 1);
+    /*ros::Publisher led1_pub = n.advertise<kobuki_msgs::Led>("mobile_base/commands/led1", 1);
     ros::Publisher led2_pub = n.advertise<kobuki_msgs::Led>("mobile_base/commands/led2", 1);
     kobuki_msgs::Led colour1, colour2;
-    const uint8_t BLACK = 0, GREEN = 1, ORANGE = 2, RED = 3;
+    const uint8_t BLACK = 0, GREEN = 1, ORANGE = 2, RED = 3;*/
 
     // Subscribers
     ros::Subscriber bumper_sub = n.subscribe("mobile_base/events/bumper", 10, &bumperCallback);
@@ -521,6 +520,7 @@ int main(int argc, char** argv) {
     std::cout << "Spin 1 complete \n";
     while(ros::ok() && secondsElapsed <= 1200) {      
         explore.start();
+        //For publishing colours to LEDs
         //colour1.value = RED;
         //ROS_INFO("Colour: %d", colour1.value);
         //led1_pub.publish(colour1);
@@ -528,7 +528,6 @@ int main(int argc, char** argv) {
         //ROS_INFO("Colour: %d", colour2.value);
         //led2_pub.publish(colour2);
 
-       
         if(emotionDetected >=0){
             explore.stop();
             ROS_INFO("Emotion detected %d", emotionDetected);
@@ -614,10 +613,10 @@ int main(int argc, char** argv) {
                 angular = 0;
                 ros::spinOnce();
 
-                //Rotate 10 to 45 in clearer direction 60% of the time
                 if(emotionDetected == -1 && allFrontiersRed){
                     moveThruDistance(0.85, 0.15, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
                 }
+                //Rotate 10 to 45 in clearer direction 60% of the time
                 if(emotionDetected == -1 && allFrontiersRed){
                     std::cout << "Spin in all nav failed started \n";
                     rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/4), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
