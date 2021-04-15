@@ -459,11 +459,12 @@ void robotReaction(sound_play::SoundClient& sc){
 
         namedWindow("robotEmotion", CV_WINDOW_NORMAL);
         imshow("robotEmotion", Image);
-        waitKey(5000);
-        destroyWindow("robotEmotion");
+        waitKey(3500);
+        //destroyWindow("robotEmotion");
 
         std::string path_to_sounds = ros::package::getPath("mie443_contest3") + "/sounds/";
         sc.playWave(path_to_sounds + soundFiles[emotionDetected]);   
+        destroyWindow("robotEmotion");
     }
 }
 
@@ -507,7 +508,7 @@ int main(int argc, char** argv) {
     geometry_msgs::Point point;
     
     std::vector<int> redFrontiersSortedIndices;
-    std::vector<float> radii = {1.5, 1.0, 2.0, 2.5, 3.0, 0.5};
+    std::vector<float> radii = {1.5, 1.0, 0.5, 2.0, 2.5, 3.0};
     std::vector<float> angles = {0.0, M_PI/3, -M_PI/3, 2*M_PI/3, -2*M_PI/3, M_PI-0.01};
 
     // Contest count down timer
