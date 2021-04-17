@@ -508,7 +508,7 @@ int main(int argc, char** argv) {
     geometry_msgs::Point point;
     
     std::vector<int> redFrontiersSortedIndices;
-    std::vector<float> radii = {1.5, 1.0, 0.5, 2.0, 2.5, 3.0};
+    std::vector<float> radii = {1.5, 2.0, 1.0, 2.5, 3.0, 0.5};
     std::vector<float> angles = {0.0, M_PI/3, -M_PI/3, 2*M_PI/3, -2*M_PI/3, M_PI-0.01};
 
     // Contest count down timer

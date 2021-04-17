@@ -2,7 +2,7 @@
 
 //bool cancelGoals = false;
 void feedbackCb(const move_base_msgs::MoveBaseFeedback::ConstPtr& feedback){
-    std::cout << "In feedback callback \n";
+    //std::cout << "In feedback callback \n";
     ros::spinOnce();
     if(emotionDetected != -1){
         std::cout << "Emotion detected while in move_base! \n";

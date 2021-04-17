@@ -242,7 +242,7 @@ void Explore::makePlan()
                 const actionlib::SimpleClientGoalState& status,
                 const move_base_msgs::MoveBaseResultConstPtr& result) {
         reachedGoal(status, result, target_position);
-      });
+      }, MoveBaseClient::SimpleActiveCallback(), &feedbackCb);
 }
 
 bool Explore::goalOnBlacklist(const geometry_msgs::Point& goal)

@@ -50,6 +50,7 @@
 
 #include <costmap_client.h>
 #include <frontier_search.h>
+#include <navigation.h>
 
 namespace explore
 {
