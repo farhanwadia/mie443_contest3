@@ -24,7 +24,7 @@ class EmotionDetector(object):
         #
         # Load your emotion detector.
         self.model = EmotionClassificationNet()
-        self.model.load_state_dict(torch.load(args.model_file))
+        self.model.load_state_dict(torch.load(args.model_file, map_location=torch.device('cpu')), strict=False)
         self.model.eval()
         #
         # Visualize.

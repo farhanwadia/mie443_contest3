@@ -16,47 +16,46 @@ def getInputArgs():
     return args
 class EmotionClassificationNet(nn.Module):
 
-    def __init__(self):
+    def __init__(self, dropout=0.25):
         super(EmotionClassificationNet, self).__init__()
         self.cnn = nn.Sequential(
             nn.Conv2d(1, 64, 3, padding=1),
-            nn.ReLU(),
             nn.BatchNorm2d(64),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, 2),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout),
 
             nn.Conv2d(64, 128, 3, padding=1),
-            nn.ReLU(),
             nn.BatchNorm2d(128),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, 2),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout),
 
             nn.Conv2d(128, 128, 3, padding=1),
-            nn.ReLU(),
             nn.BatchNorm2d(128),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, 2),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout),
 
             nn.Conv2d(128, 128, 3, padding=1),
-            nn.ReLU(),
             nn.BatchNorm2d(128),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, 2),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout),
 
-            nn.Conv2d(128, 128, 3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.Dropout(0.25),
+            nn.Conv2d(128, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(),
+            nn.Dropout(dropout),
         )
         self.nn = nn.Sequential(
-            nn.Linear(1152, 512),
-            nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Linear(1152*2,512),
+            nn.LeakyReLU(),
+            nn.Dropout(dropout),
             nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.LeakyReLU(),
+            nn.Dropout(dropout),
             nn.Linear(256, 7)
-
         )
 
     def forward(self, x, test_mode=False):

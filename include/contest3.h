@@ -4,9 +4,6 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include "explore.h"
-//
-// If you cannot find the sound play library try the following command.
-// sudo apt install ros-kinetic-sound-play
 #include <sound_play/sound_play.h>
 #include <ros/console.h>
 #include <kobuki_msgs/Led.h>
@@ -47,8 +44,6 @@ void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg);
 void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
 
 void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
-
-void imuCallback(const sensor_msgs::Imu::ConstPtr& msg);
 
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg);
 

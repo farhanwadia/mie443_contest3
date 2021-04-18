@@ -174,15 +174,6 @@ void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
     //ROS_INFO("Min Laser Distance: %f \n Left: %f \n Right: %f \n LSum: %f \n RSum: %f", minLaserDist, minLSLaserDist, minRSLaserDist, LSLaserSum, RSLaserSum);
 }
 
-float omega = 0.0, accX = 0.0, accY = 0.0, yaw_imu = 0.0;
-void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
-    omega = msg->angular_velocity.z;
-    accX = msg->linear_acceleration.x;
-    accY = msg->linear_acceleration.y;
-    yaw_imu = tf::getYaw(msg->orientation);
-    //ROS_INFO("Acceleration: (%f, %f) \n IMU Yaw: %f deg Omega %f", accX, accY, RAD2DEG(yaw_imu), omega);
-}
-
 int emotionDetected = -1; //Use -1 to indicate exploring is occuring, 0-6 for emotions
 void emotionCallback(const std_msgs::Int32::ConstPtr& msg){
     emotionDetected = msg->data;
@@ -413,9 +404,9 @@ bool navigateNearby(geometry_msgs::Point startPoint, std::vector<float> radii, s
 
     if(validPlan){
         navSuccess = Navigation::moveToGoal(xx, yy, atan2f(yy - robotPose.y, xx - robotPose.x), 10);
-        ros::spinOnce();
-        ros::Duration(0.01).sleep();
     }
+    ros::spinOnce();
+    ros::Duration(0.01).sleep();
     if(!allFrontiersRed){
         std::cout << "At least 1 frontier blue \n";
         return false;
@@ -492,7 +483,6 @@ int main(int argc, char** argv) {
     // Subscribers
     ros::Subscriber bumper_sub = n.subscribe("mobile_base/events/bumper", 10, &bumperCallback);
     ros::Subscriber odom = n.subscribe("odom", 1, &odomCallback);
-    ros::Subscriber imu_sub = n.subscribe("mobile_base/sensors/imu_data", 1, &imuCallback);
     ros::Subscriber laser_sub = n.subscribe("scan", 10, &laserCallback);
     ros::Subscriber frontier_sub = n.subscribe("contest3/frontiers", 10, &markerCallback);
     ros::Subscriber emotion_sub = n.subscribe("/detected_emotion", 1, &emotionCallback);
@@ -508,7 +498,7 @@ int main(int argc, char** argv) {
     geometry_msgs::Point point;
     
     std::vector<int> redFrontiersSortedIndices;
-    std::vector<float> radii = {1.5, 2.0, 1.0, 2.5, 3.0, 0.5};
+    std::vector<float> radii = {1.5, 1.0, 2.0, 2.5, 3.0, 0.5};
     std::vector<float> angles = {0.0, M_PI/3, -M_PI/3, 2*M_PI/3, -2*M_PI/3, M_PI-0.01};
 
     // Contest count down timer
@@ -549,7 +539,7 @@ int main(int argc, char** argv) {
                 /*explore.stop();
                 moveThruDistance(-0.6, 0.25, posX, posY, &vel, &vel_pub, &secondsElapsed, start);
                 rotateThruAngle(copysign(2*M_PI - 0.01, chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.2, &vel, &vel_pub, &secondsElapsed, start);
-                explore.start();*/               
+                explore.start();*/            
             }
             prevNumRed = redFrontiers.size();
         }
@@ -569,9 +559,9 @@ int main(int argc, char** argv) {
                     rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                     std::cout << "Spin in 1 frontier red ended \n";
                 }
+                ros::spinOnce();
                 // Go to furthest point in frontier if still red
                 if(emotionDetected == -1 && allFrontiersRed){
-                    ros::spinOnce();
                     point = getFurthestPoint(redFrontiers[0], robotPose); 
                     navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                 }
@@ -595,9 +585,9 @@ int main(int argc, char** argv) {
                         rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/3), chooseAngular(50, 0.6)), rotationSpeed, yaw, 0.0, &vel, &vel_pub, &secondsElapsed, start);
                         std::cout << "Spin in 2+ frontier red ended \n";
                     }
+                    ros::spinOnce();
                     // Go to furthest point in frontier if all still red
                     if(emotionDetected == -1 && allFrontiersRed){
-                        ros::spinOnce();
                         point = getFurthestPoint(redFrontiers[idx], robotPose);
                         navSuccess = navigateNearby(point, radii, angles, n, robotPose);
                         ros::spinOnce();
